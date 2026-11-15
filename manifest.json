@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Collectr Card Picker",
+  "name": "Card Picker for Collectr",
   "version": "1.0.0",
-  "description": "Click cards on a Collectr showcase to build a want list, then copy it to send to the seller.",
+  "description": "Click cards on a Collectr showcase to build a want list, then copy a clean list to send the seller.",
   "permissions": [
     "storage"
   ],
@@ -13,12 +13,14 @@
     "default_title": "Show/hide Card Picker",
     "default_icon": {
       "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
       "48": "icons/icon48.png",
       "128": "icons/icon128.png"
     }
   },
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
@@ -35,5 +37,6 @@
   ],
   "content_security_policy": {
     "extension_pages": "script-src 'self'; object-src 'self'"
-  }
+  },
+  "homepage_url": "https://github.com/matiblue/collectr-card-picker"
 }

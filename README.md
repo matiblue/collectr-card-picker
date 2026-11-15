@@ -1,4 +1,4 @@
-# Collectr Card Picker
+# Card Picker for Collectr
 
 A small Chrome extension for buying cards from someone's [Collectr](https://getcollectr.com) showcase. Click the cards you want, then copy a clean, ready-to-send list for the seller. No more screenshots or typing card names into Messenger.
 
@@ -36,7 +36,7 @@ Works in Chrome and other Chromium browsers (Edge, Brave, Arc).
 - **The only permission is `storage`**, used to save your want lists locally in your browser.
 - **No network requests, analytics, or remote code.** Nothing leaves your machine except what you paste yourself.
 
-See [SECURITY.md](SECURITY.md) for the security review notes.
+See [PRIVACY.md](PRIVACY.md) for the privacy policy and [SECURITY.md](SECURITY.md) for the security review notes.
 
 ## How it works
 `content.js` finds Collectr's `.product-card` elements, reads the visible card details, and intercepts clicks while Select mode is on. The panel lives in a closed Shadow DOM so it doesn't clash with the site's styles. If Collectr changes its markup, the parser in `parseCard()` is the place to update.
