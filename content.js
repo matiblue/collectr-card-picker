@@ -303,6 +303,7 @@
     e.stopPropagation();
     e.stopImmediatePropagation();
     toggleItem(parseCard(card));
+    save();
   }
   function toggleItem(data, forceAdd = false) {
     const i = items.findIndex((it) => it.key === data.key);
@@ -356,6 +357,7 @@
   }
   function save() {
     store.set(listKey, { items, updated: Date.now(), url: location.href });
+    paintCards();   // update the ✓ markers in the grid right away
     render(true);
   }
   function savePrefs() {
@@ -485,9 +487,9 @@
             </div>
             <div class="right">
               <span class="price">${esc(it.price || '—')}</span>
-              ${it.qty > 1 ? `<span class="qty"><button data-act="dec" data-i="${i}">−</button>${it.want} of ${it.qty}<button data-act="inc" data-i="${i}">+</button></span>` : ''}
+              ${it.qty > 1 ? `<span class="qty"><button data-act="dec" data-k="${esc(it.key)}">−</button>${it.want} of ${it.qty}<button data-act="inc" data-k="${esc(it.key)}">+</button></span>` : ''}
             </div>
-            <button class="x" data-act="rm" data-i="${i}" title="Remove">✕</button>
+            <button class="x" data-act="rm" data-k="${esc(it.key)}" title="Remove">✕</button>
           </li>`).join('')}</ul>`
       : `<div class="empty"><b>No cards yet</b>${selectMode ? 'Click cards on the page to add them.' : 'Turn on Select mode, then click cards to add them.'}</div>`;
     return `${body}
@@ -624,8 +626,8 @@
     const act = btn.dataset.act;
     if (act === 'imp-file-label') return; // let the <label> open the file picker
     e.preventDefault();
-    const i = +btn.dataset.i;
-    if (['rm', 'inc', 'dec'].includes(act) && !items[i]) return;
+    const it = ['rm', 'inc', 'dec'].includes(act) ? items.find((x) => x.key === btn.dataset.k) : null;
+    if (['rm', 'inc', 'dec'].includes(act) && !it) { render(true); return; }
     switch (act) {
       case 'open': panelOpen = true; savePrefs(); render(true); break;
       case 'min': panelOpen = false; importing = false; menuOpen = false; savePrefs(); render(true); break;
@@ -635,9 +637,9 @@
       case 'mode': selectMode = !selectMode; savePrefs(); render(true); break;
       case 'prices': includePrices = !includePrices; savePrefs(); render(true); break;
       case 'hl': highlightNeeds = !highlightNeeds; savePrefs(); render(true); break;
-      case 'rm': items.splice(i, 1); save(); break;
-      case 'inc': items[i].want = Math.min(items[i].qty, items[i].want + 1); save(); break;
-      case 'dec': items[i].want = Math.max(1, items[i].want - 1); save(); break;
+      case 'rm': items = items.filter((x) => x !== it); save(); break;
+      case 'inc': it.want = Math.min(it.qty, it.want + 1); save(); break;
+      case 'dec': it.want = Math.max(1, it.want - 1); save(); break;
       case 'clear': if (confirm(`Clear all ${items.length} cards from the list?`)) { items = []; save(); } break;
       case 'copy': copy(buildMessage()).then((ok) => toast(ok ? 'Copied — paste it to the seller' : 'Copy failed')); break;
       case 'imp-open': importing = true; menuOpen = false; tab = 'need'; importError = ''; render(true); break;
