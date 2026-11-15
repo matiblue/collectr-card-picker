@@ -238,7 +238,8 @@
         border-radius: 12px; background: #f59e0b; color: #111827; font: 800 12px/24px system-ui, sans-serif; letter-spacing: .3px;
         box-shadow: 0 2px 6px rgba(0,0,0,.4); pointer-events: none;
       }
-      .product-card[data-cpp-sel] { position: relative !important; outline: 3px solid #10b981 !important; outline-offset: -3px !important; background-color: rgba(16,185,129,.10) !important; }
+      /* selected must win over the gold 'need' style (same or higher specificity, declared later) */
+      html .product-card[data-cpp-sel], html.cpp-need .product-card[data-cpp-need][data-cpp-sel] { position: relative !important; outline: 3px solid #10b981 !important; outline-offset: -3px !important; background-color: rgba(16,185,129,.10) !important; }
       .product-card[data-cpp-sel]::after {
         content: attr(data-cpp-sel); position: absolute; top: 6px; right: 6px; z-index: 5;
         min-width: 26px; height: 26px; padding: 0 6px; box-sizing: border-box; border-radius: 13px;
