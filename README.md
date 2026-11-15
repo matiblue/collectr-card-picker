@@ -10,15 +10,15 @@ A small Chrome extension for buying cards from someone's [Collectr](https://getc
 - **Quantities.** If the seller has more than one copy, choose how many you want.
 - **One-click message.** Copies a numbered list with set, card number, condition, finish and (optionally) Collectr market price plus a total.
 - **Saved per seller/collection.** Close the tab and come back later.
-- **Select mode toggle.** Turn it off to click cards normally.
-- **★ Cards you need.** Import your "still needed" list from a spreadsheet and matching cards get a gold **★ NEED** badge in the grid. The panel lists them (click one to jump to it) with **+ Add all to want list**, and the toolbar icon shows the count.
+- **Settings (⚙).** Select mode (turn off to click cards normally), include prices, highlight needed cards.
+- **★ Cards you need.** Import your "still needed" list from a spreadsheet and matching cards get a gold **★ NEED** badge in the grid. The **★ Need** tab lists them: click one to jump to it, **+** to add it, or **Add all**. The toolbar icon shows the count.
 
 ### Importing your needs list
-Click **Import list** in the panel, then either:
+Open the **★ Need** tab (or ⚙ Settings) and click **Import list**, then either:
 - **Paste from Google Sheets or Excel:** select your rows *including the header row* and copy them. You need a card name column (`Card`, `Card Name` or `Name`) and a `Number` column. `Set` and `Owned` columns are used if present, and rows marked `Yes`/`Coming`/`Owned` are skipped.
 - **Choose a CSV file:** a single sheet, or a whole-workbook export. If the workbook has a tab named like *Still Needed*, *Wants* or *Missing*, only that tab is used.
 
-Cards match on **card number + name**, so `Mega Gengar ex 269/217` won't be flagged when you need `284/217`. Variants like *(Master Ball Pattern)* only match if their number matches too. Click **Scan whole showcase** to scroll through and load every card so nothing is missed.
+Cards match on **card number + name** (and set, when both sides list one), so `Mega Gengar ex 269/217` won't be flagged when you need `284/217`. Variants like *(Master Ball Pattern)* only match if their number matches too. Click **Scan whole showcase** to scroll through and load every card so nothing is missed.
 
 Example of what gets copied:
 

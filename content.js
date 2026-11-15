@@ -27,6 +27,8 @@
   let highlightNeeds = true;
   let panelOpen = true;
   let importing = false;
+  let menuOpen = false;
+  let tab = 'want';          // 'want' | 'need'
   let importError = '';
   let scanStatus = '';
   let listKey = null;
@@ -70,7 +72,10 @@
       const nn = normName(n.name);
       if (!nn || !(nn === nm || nm.startsWith(nn) || nn.startsWith(nm))) continue;
       const ns = normSet(n.set);
-      if (ns && cs && ns === cs) return n;          // exact set match wins
+      if (ns && cs) {
+        if (ns === cs) return n;                                   // exact set match wins
+        if (!ns.includes(cs) && !cs.includes(ns)) continue;        // e.g. Vanillish 190/182 Paradox Rift vs Holiday Calendar
+      }
       if (!best) best = n;
     }
     return best;
@@ -214,7 +219,7 @@
     needs = rows;
     needsMeta = { count: rows.length, importedAt: Date.now(), source: clip(source, 80) };
     await store.set('cpp:needs', { rows: needs, meta: needsMeta });
-    importing = false; importError = '';
+    importing = false; importError = ''; tab = 'need';
     buildNeedIndex(); rekeyAll(); render(true);
     toast(`Imported ${rows.length} needed cards`);
   }
@@ -344,6 +349,7 @@
     includePrices = prefs.includePrices ?? true;
     highlightNeeds = prefs.highlightNeeds ?? true;
     panelOpen = prefs.panelOpen ?? true;
+    tab = prefs.tab === 'need' ? 'need' : 'want';
     scanStatus = '';
     rekeyAll();
     render(true);
@@ -353,7 +359,7 @@
     render(true);
   }
   function savePrefs() {
-    store.set('cpp:prefs', { selectMode, includePrices, highlightNeeds, panelOpen });
+    store.set('cpp:prefs', { selectMode, includePrices, highlightNeeds, panelOpen, tab });
   }
 
   // ---------- message text ----------
@@ -377,67 +383,76 @@
   }
 
   // ---------- panel UI ----------
+  const COND_SHORT = { 'near mint': 'NM', 'lightly played': 'LP', 'moderately played': 'MP', 'heavily played': 'HP', damaged: 'DMG' };
+  const shortCond = (c) => COND_SHORT[String(c).toLowerCase()] || c;
+
   const CSS = `
     :host { all: initial; }
     * { box-sizing: border-box; font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+    button { font: inherit; }
     .fab { position: fixed; right: 20px; bottom: 20px; z-index: 2147483646; background: #10b981; color: #fff; border: 0;
-      border-radius: 999px; padding: 12px 18px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
+      border-radius: 999px; padding: 11px 16px; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 6px 20px rgba(0,0,0,.45); }
     .fab .nd { background: #f59e0b; color: #111827; border-radius: 999px; padding: 2px 8px; margin-left: 6px; }
-    .panel { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; width: 360px; max-height: calc(100vh - 40px);
-      display: flex; flex-direction: column; background: #111827; color: #e5e7eb; border: 1px solid #374151; border-radius: 14px;
+    .panel { position: fixed; right: 20px; bottom: 20px; z-index: 2147483647; width: 340px; max-height: min(620px, calc(100vh - 40px));
+      display: flex; flex-direction: column; background: #111827; color: #e5e7eb; border: 1px solid #2b3445; border-radius: 14px;
       box-shadow: 0 12px 40px rgba(0,0,0,.6); font-size: 13px; overflow: hidden; }
-    header { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid #1f2937; }
-    header h1 { flex: 1; margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
-    header .count { color: #10b981; }
-    .icon { background: none; border: 0; color: #9ca3af; cursor: pointer; font-size: 18px; line-height: 1; padding: 2px 4px; }
-    .icon:hover { color: #fff; }
-    .bar { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; background: #0b1220; gap: 8px; }
-    .toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; color: #d1d5db; }
-    .sw { width: 34px; height: 18px; border-radius: 9px; background: #374151; position: relative; transition: background .15s; flex: none; }
-    .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .15s; }
-    .on .sw { background: #10b981; } .on .sw::after { left: 18px; }
-    .need .on .sw { background: #f59e0b; }
-    .hint { color: #6b7280; font-size: 12px; padding: 10px 14px; }
-    ul { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; flex: 1; min-height: 0; }
-    li { display: flex; gap: 10px; padding: 8px 14px; align-items: center; border-bottom: 1px solid #1f2937; }
-    li img { width: 34px; height: 47px; object-fit: cover; border-radius: 3px; flex: none; background: #1f2937; }
+    header { display: flex; align-items: center; gap: 4px; padding: 10px 10px 8px 14px; }
+    header h1 { flex: 1; margin: 0; font-size: 14px; font-weight: 700; color: #fff; }
+    .icon { background: none; border: 0; color: #9ca3af; cursor: pointer; font-size: 16px; line-height: 1; padding: 4px 6px; border-radius: 6px; }
+    .icon:hover, .icon.on { color: #fff; background: #1f2937; }
+    .tabs { display: flex; gap: 4px; margin: 0 10px 8px; padding: 3px; background: #0b1220; border-radius: 9px; }
+    .tabs button { flex: 1; border: 0; background: none; color: #9ca3af; padding: 7px 8px; border-radius: 7px; font-weight: 600; cursor: pointer; font-size: 13px; }
+    .tabs button.on { background: #1f2937; color: #fff; }
+    .tabs b { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; border-radius: 9px; background: #374151; color: #fff; font-size: 11px; line-height: 18px; }
+    .tabs .need-tab b { background: #f59e0b; color: #111827; }
+    .tabs .need-tab b.zero { background: #374151; color: #9ca3af; }
+    .notice { margin: 0 10px 8px; padding: 7px 10px; border-radius: 8px; background: #1f2937; color: #d1d5db; font-size: 12px; display: flex; align-items: center; gap: 8px; }
+    .notice span { flex: 1; }
+    .link { background: none; border: 0; color: #10b981; font-weight: 700; cursor: pointer; padding: 0; font-size: 12px; }
+    ul { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 60px; border-top: 1px solid #1f2937; }
+    li { display: flex; gap: 10px; padding: 7px 10px 7px 12px; align-items: center; border-bottom: 1px solid #1a2130; }
+    li.go { cursor: pointer; } li.go:hover { background: #161e2c; }
+    li img { width: 28px; height: 39px; object-fit: cover; border-radius: 3px; flex: none; background: #1f2937; }
     .info { flex: 1; min-width: 0; }
     .nm { font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .sub { color: #9ca3af; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .right { text-align: right; flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
-    .price { font-weight: 700; color: #fff; }
-    .qty { display: flex; align-items: center; gap: 4px; color: #9ca3af; font-size: 11.5px; }
-    .qty button { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #374151; background: #1f2937; color: #fff; cursor: pointer; padding: 0; line-height: 1; }
-    .rm { color: #6b7280; } .rm:hover { color: #f87171; }
-    footer { padding: 12px 14px; border-top: 1px solid #1f2937; display: flex; flex-direction: column; gap: 10px; }
-    .total { display: flex; justify-content: space-between; font-weight: 700; color: #fff; }
-    .row { display: flex; gap: 8px; }
-    .btn { flex: 1; border: 0; border-radius: 8px; padding: 10px; font-weight: 700; cursor: pointer; font-size: 13px; }
+    .sub { color: #8b95a7; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+    .star { color: #f59e0b; }
+    .right { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 3px; }
+    .price { font-weight: 700; color: #fff; font-size: 13px; }
+    .qty { display: flex; align-items: center; gap: 4px; color: #9ca3af; font-size: 11px; }
+    .qty button { width: 17px; height: 17px; border-radius: 4px; border: 1px solid #374151; background: #1f2937; color: #fff; cursor: pointer; padding: 0; line-height: 1; font-size: 12px; }
+    .x { flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: none; color: #6b7280; cursor: pointer; font-size: 13px; }
+    .x:hover { background: #1f2937; color: #f87171; }
+    .add { flex: none; width: 28px; height: 28px; border: 0; border-radius: 7px; background: #f59e0b; color: #111827; font-weight: 800; font-size: 16px; cursor: pointer; }
+    .add.in { background: #10b981; color: #fff; font-size: 14px; }
+    .empty { padding: 22px 18px; text-align: center; color: #8b95a7; font-size: 12.5px; line-height: 1.5; border-top: 1px solid #1f2937; }
+    .empty b { display: block; color: #e5e7eb; font-size: 13.5px; margin-bottom: 4px; }
+    footer { padding: 10px; border-top: 1px solid #1f2937; display: flex; flex-direction: column; gap: 8px; }
+    .total { display: flex; justify-content: space-between; font-weight: 700; color: #fff; padding: 0 2px; }
+    .row { display: flex; gap: 8px; align-items: center; }
+    .btn { flex: 1; border: 0; border-radius: 8px; padding: 9px 10px; font-weight: 700; cursor: pointer; font-size: 13px; }
     .primary { background: #10b981; color: #fff; } .primary:hover { background: #059669; }
-    .primary:disabled { background: #374151; color: #6b7280; cursor: default; }
-    .ghost { background: #1f2937; color: #d1d5db; flex: 0 0 auto; padding: 10px 14px; } .ghost:hover { background: #374151; }
-    .toast { position: fixed; right: 30px; bottom: 30px; z-index: 2147483647; background: #10b981; color: #fff; padding: 10px 14px; border-radius: 8px; font-weight: 700; }
-
-    .need { border-bottom: 1px solid #1f2937; background: #1a1505; }
-    .need-head { display: flex; align-items: center; gap: 8px; padding: 10px 14px 6px; }
-    .need-head .t { flex: 1; font-weight: 700; color: #fbbf24; }
-    .need-head .t.none { color: #9ca3af; font-weight: 600; }
-    .need ul { max-height: 170px; flex: none; padding: 0; }
-    .need li { padding: 6px 14px; border-bottom: 1px solid #2a2208; cursor: pointer; }
-    .need li:hover { background: #2a2208; }
-    .need li img { width: 26px; height: 36px; }
-    .need .star { color: #f59e0b; font-weight: 800; }
-    .need .in { color: #10b981; font-size: 11px; font-weight: 700; }
-    .need-actions { display: flex; gap: 6px; padding: 8px 14px 10px; align-items: center; flex-wrap: wrap; }
-    .sbtn { border: 0; border-radius: 7px; padding: 6px 10px; font-weight: 700; font-size: 12px; cursor: pointer; background: #2a2208; color: #fbbf24; }
-    .sbtn:hover { background: #3a2f0b; }
-    .sbtn.amber { background: #f59e0b; color: #111827; } .sbtn.amber:hover { background: #fbbf24; }
-    .sbtn:disabled { opacity: .5; cursor: default; }
-    .meta { color: #78716c; font-size: 11px; padding: 0 14px 10px; }
-    .meta a { color: #a8a29e; cursor: pointer; text-decoration: underline; }
-    .imp { padding: 10px 14px 12px; display: flex; flex-direction: column; gap: 8px; }
-    .imp p { margin: 0; color: #a8a29e; font-size: 12px; line-height: 1.4; }
-    .imp textarea { width: 100%; height: 110px; resize: vertical; background: #0b1220; color: #e5e7eb; border: 1px solid #374151; border-radius: 8px; padding: 8px; font: 12px ui-monospace, Menlo, monospace; }
+    .amber { background: #f59e0b; color: #111827; } .amber:hover { background: #fbbf24; }
+    .btn:disabled { background: #1f2937; color: #6b7280; cursor: default; }
+    .ghost { background: #1f2937; color: #d1d5db; flex: 0 0 auto; } .ghost:hover { background: #374151; }
+    .meta { color: #6b7280; font-size: 11px; padding: 0 2px; }
+    .toast { position: fixed; right: 20px; top: 20px; z-index: 2147483647; background: #10b981; color: #fff; padding: 10px 14px; border-radius: 8px; font-weight: 700; }
+    .menu { padding: 4px 6px 8px; border-top: 1px solid #1f2937; overflow-y: auto; }
+    .opt { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 7px; cursor: pointer; user-select: none; }
+    .opt:hover { background: #222c3f; }
+    .opt span { flex: 1; } .opt small { display: block; color: #8b95a7; font-size: 11px; margin-top: 1px; }
+    .sw { width: 32px; height: 18px; border-radius: 9px; background: #374151; position: relative; flex: none; }
+    .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: left .12s; }
+    .opt.on .sw { background: #10b981; } .opt.on .sw::after { left: 16px; }
+    .sep { height: 1px; background: #2f3a4f; margin: 6px 4px; }
+    .needs-meta { padding: 6px 8px 4px; color: #8b95a7; font-size: 11.5px; }
+    .needs-meta .row { margin-top: 6px; }
+    .sm { border: 0; border-radius: 6px; padding: 5px 9px; font-weight: 700; font-size: 12px; cursor: pointer; background: #2a3448; color: #e5e7eb; }
+    .sm:hover { background: #34405a; }
+    .imp { padding: 4px 12px 12px; display: flex; flex-direction: column; gap: 8px; border-top: 1px solid #1f2937; }
+    .imp h2 { margin: 8px 0 0; font-size: 13.5px; color: #fff; }
+    .imp p { margin: 0; color: #8b95a7; font-size: 12px; line-height: 1.45; }
+    .imp textarea { width: 100%; height: 120px; resize: vertical; background: #0b1220; color: #e5e7eb; border: 1px solid #374151; border-radius: 8px; padding: 8px; font: 11.5px ui-monospace, Menlo, monospace; }
     .imp .err { color: #f87171; font-size: 12px; }
     .imp input[type=file] { display: none; }
   `;
@@ -453,44 +468,92 @@
   }
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const subLine = (c) => esc([c.set, c.number, shortCond(c.condition)].filter(Boolean).join(' · '));
+  const thumb = (c) => (c.img ? `<img src="${esc(c.img)}" alt="">` : '<img alt="">');
 
-  function needSection() {
-    if (importing) {
-      return `<div class="need"><div class="imp">
-          <p><b style="color:#fbbf24">Import cards you need.</b> In your spreadsheet, select the rows <i>including the header row</i> (needs a card name column and a number column; Set and Owned columns are used if present, and rows marked owned are skipped), copy, and paste here. Or choose a CSV file.</p>
-          <textarea placeholder="Set&#9;Card&#9;Rarity&#9;Number&#9;Price&#10;Paradox Rift&#9;Crustle&#9;Illustration Rare&#9;183/182&#9;5.66"></textarea>
-          ${importError ? `<div class="err">${esc(importError)}</div>` : ''}
-          <div class="row">
-            <button class="sbtn amber" data-act="imp-go">Import</button>
-            <label class="sbtn" data-act="imp-file-label">Choose CSV…<input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain"></label>
-            <span style="flex:1"></span>
-            <button class="sbtn" data-act="imp-cancel">Cancel</button>
-          </div></div></div>`;
-    }
+  function wantView() {
+    const needKeys = new Set(matches.map((m) => m.key));
+    const count = items.reduce((n, it) => n + it.want, 0);
+    const total = items.reduce((n, it) => n + priceNum(it.price) * it.want, 0);
+    const body = items.length
+      ? `<ul>${items.map((it, i) => `
+          <li>
+            ${thumb(it)}
+            <div class="info">
+              <div class="nm" title="${esc(it.name)}">${needKeys.has(it.key) ? '<span class="star">★</span> ' : ''}${esc(it.name)}</div>
+              <div class="sub">${subLine(it)}</div>
+            </div>
+            <div class="right">
+              <span class="price">${esc(it.price || '—')}</span>
+              ${it.qty > 1 ? `<span class="qty"><button data-act="dec" data-i="${i}">−</button>${it.want} of ${it.qty}<button data-act="inc" data-i="${i}">+</button></span>` : ''}
+            </div>
+            <button class="x" data-act="rm" data-i="${i}" title="Remove">✕</button>
+          </li>`).join('')}</ul>`
+      : `<div class="empty"><b>No cards yet</b>${selectMode ? 'Click cards on the page to add them.' : 'Turn on Select mode, then click cards to add them.'}</div>`;
+    return `${body}
+      <footer>
+        <div class="total"><span>${count} card${count === 1 ? '' : 's'}</span><span>${fmt(total)}</span></div>
+        <div class="row">
+          <button class="btn primary" data-act="copy" ${items.length ? '' : 'disabled'}>Copy list for seller</button>
+          <button class="btn ghost" data-act="clear" ${items.length ? '' : 'disabled'}>Clear</button>
+        </div>
+      </footer>`;
+  }
+
+  function needView() {
     if (!needs.length) {
-      return `<div class="need"><div class="need-head"><span class="t none">★ Highlight cards you need</span>
-        <button class="sbtn" data-act="imp-open">Import list</button></div><div class="meta">Paste your “still needed” list from a spreadsheet and matching cards light up.</div></div>`;
+      return `<div class="empty"><b>Highlight cards you need</b>Paste your “still needed” list from a spreadsheet and matching cards on any showcase get a ★ badge.</div>
+        <footer><button class="btn amber" data-act="imp-open">Import list</button></footer>`;
     }
     const inList = new Set(items.map((i) => i.key));
-    const n = matches.length;
     const missing = matches.filter((m) => !inList.has(m.key)).length;
-    const list = n ? `<ul>${matches.map((m) => `
-        <li data-act="goto" data-k="${esc(m.key)}">
-          ${m.card.img ? `<img src="${esc(m.card.img)}" alt="">` : ''}
-          <div class="info"><div class="nm"><span class="star">★</span> ${esc(m.card.name)}</div>
-            <div class="sub">${esc([m.card.set, m.card.number].filter(Boolean).join(' · '))}${m.card.condition ? ' · ' + esc(m.card.condition) : ''}</div></div>
-          <div class="right"><span class="price">${esc(m.card.price || '—')}</span>${inList.has(m.key) ? '<span class="in">✓ in list</span>' : ''}</div>
-        </li>`).join('')}</ul>` : '';
-    const when = needsMeta?.importedAt ? new Date(needsMeta.importedAt).toLocaleDateString() : '';
-    return `<div class="need">
-        <div class="need-head"><span class="t ${n ? '' : 'none'}">${n ? `★ ${n} card${n === 1 ? '' : 's'} you need here` : 'No cards you need found yet'}</span>
-          <label class="toggle ${highlightNeeds ? 'on' : ''}" data-act="hl" title="Highlight in grid"><span class="sw"></span></label></div>
-        ${list}
-        <div class="need-actions">
-          ${n ? `<button class="sbtn amber" data-act="add-needs" ${missing ? '' : 'disabled'}>${missing ? `+ Add ${missing} to want list` : 'All in want list'}</button>` : ''}
-          <button class="sbtn" data-act="scan" ${scanStatus.startsWith('Scanning') ? 'disabled' : ''}>${esc(scanStatus.startsWith('Scanning') ? scanStatus : 'Scan whole showcase')}</button>
+    const scanning = scanStatus.startsWith('Scanning');
+    const checked = scanStatus && !scanning ? scanStatus : `Checked ${document.querySelectorAll('.product-card').length} loaded cards`;
+    const body = matches.length
+      ? `<ul>${matches.map((m) => `
+          <li class="go" data-act="goto" data-k="${esc(m.key)}" title="Show on page">
+            ${thumb(m.card)}
+            <div class="info"><div class="nm">${esc(m.card.name)}</div><div class="sub">${subLine(m.card)}</div></div>
+            <div class="right"><span class="price">${esc(m.card.price || '—')}</span></div>
+            ${inList.has(m.key)
+              ? `<button class="add in" data-act="need-toggle" data-k="${esc(m.key)}" title="In want list (click to remove)">✓</button>`
+              : `<button class="add" data-act="need-toggle" data-k="${esc(m.key)}" title="Add to want list">+</button>`}
+          </li>`).join('')}</ul>`
+      : `<div class="empty"><b>None found yet</b>None of the ${needs.length} cards on your list are on this page.${scanning ? '' : ' Scan the whole showcase to check every card.'}</div>`;
+    return `${body}
+      <footer>
+        <div class="row">
+          ${matches.length ? `<button class="btn amber" data-act="add-needs" ${missing ? '' : 'disabled'}>${missing ? `Add ${missing} to want list` : 'All added'}</button>` : ''}
+          <button class="btn ${matches.length ? 'ghost' : 'amber'}" data-act="scan" ${scanning ? 'disabled' : ''}>${scanning ? esc(scanStatus) : 'Scan showcase'}</button>
         </div>
-        <div class="meta">${scanStatus && !scanStatus.startsWith('Scanning') ? esc(scanStatus) + ' · ' : 'Only cards loaded so far are checked · '}Needs list: ${needs.length} cards${when ? ` (imported ${esc(when)})` : ''} · <a data-act="imp-open">Update</a> · <a data-act="needs-clear">Remove</a></div>
+        <div class="meta">${esc(checked)} · your list has ${needs.length}</div>
+      </footer>`;
+  }
+
+  function importView() {
+    return `<div class="imp">
+        <h2>Import cards you need</h2>
+        <p>Copy the rows from your spreadsheet <b>including the header row</b> and paste below. It needs a card name and a number column. Set and Owned columns are used if present.</p>
+        <textarea placeholder="Set&#9;Card&#9;Number&#10;Paradox Rift&#9;Crustle&#9;183/182"></textarea>
+        ${importError ? `<div class="err">${esc(importError)}</div>` : ''}
+        <div class="row">
+          <button class="btn amber" data-act="imp-go">Import</button>
+          <label class="btn ghost" data-act="imp-file-label" style="text-align:center">CSV file…<input type="file" accept=".csv,.tsv,.txt,text/csv,text/plain"></label>
+          <button class="btn ghost" data-act="imp-cancel">Cancel</button>
+        </div>
+      </div>`;
+  }
+
+  function menuView() {
+    const when = needsMeta?.importedAt ? new Date(needsMeta.importedAt).toLocaleDateString() : '';
+    return `<div class="menu">
+        <div class="opt ${selectMode ? 'on' : ''}" data-act="mode"><span>Select mode<small>Click cards on the page to add them</small></span><i class="sw"></i></div>
+        <div class="opt ${includePrices ? 'on' : ''}" data-act="prices"><span>Include prices<small>In the message you copy</small></span><i class="sw"></i></div>
+        <div class="opt ${highlightNeeds ? 'on' : ''}" data-act="hl"><span>Highlight needed cards<small>★ badge in the grid</small></span><i class="sw"></i></div>
+        <div class="sep"></div>
+        <div class="needs-meta">${needs.length ? `Needs list: <b style="color:#e5e7eb">${needs.length} cards</b>${when ? ` · imported ${esc(when)}` : ''}` : 'No needs list imported'}
+          <div class="row">${needs.length ? '<button class="sm" data-act="imp-open">Update</button><button class="sm" data-act="needs-clear">Remove</button>' : '<button class="sm" data-act="imp-open">Import list</button>'}</div>
+        </div>
       </div>`;
   }
 
@@ -503,49 +566,25 @@
     document.documentElement.classList.toggle('cpp-need', highlightNeeds && needs.length > 0);
 
     const count = items.reduce((n, it) => n + it.want, 0);
-    const total = items.reduce((n, it) => n + priceNum(it.price) * it.want, 0);
-
     if (!panelOpen) {
-      root.innerHTML = `<style>${CSS}</style><button class="fab" data-act="open">🃏 Want list (${count})${matches.length ? `<span class="nd">★ ${matches.length} needed</span>` : ''}</button>`;
+      root.innerHTML = `<style>${CSS}</style><button class="fab" data-act="open">🃏 Want list (${count})${matches.length ? `<span class="nd">★ ${matches.length}</span>` : ''}</button>`;
       return;
     }
-
-    const list = items.length
-      ? `<ul>${items.map((it, i) => `
-          <li>
-            ${it.img ? `<img src="${esc(it.img)}" alt="">` : '<img alt="">'}
-            <div class="info">
-              <div class="nm" title="${esc(it.name)}">${esc(it.name)}</div>
-              <div class="sub">${esc([it.set, it.number].filter(Boolean).join(' · '))}</div>
-              <div class="sub">${esc([it.condition, it.variant].filter(Boolean).join(' · '))}</div>
-            </div>
-            <div class="right">
-              <span class="price">${esc(it.price || '—')}</span>
-              ${it.qty > 1 ? `<span class="qty"><button data-act="dec" data-i="${i}">−</button>${it.want}/${it.qty}<button data-act="inc" data-i="${i}">+</button></span>` : ''}
-              <button class="icon rm" data-act="rm" data-i="${i}" title="Remove">✕</button>
-            </div>
-          </li>`).join('')}</ul>`
-      : `<div class="hint">Click any card on the page to add it here. Click it again to remove it.</div>`;
-
+    const nNeed = matches.length;
+    const body = importing ? importView() : tab === 'need' ? needView() : wantView();
     root.innerHTML = `<style>${CSS}</style>
       <div class="panel">
         <header>
-          <h1>Want list <span class="count">(${count})</span></h1>
+          <h1>${menuOpen ? 'Settings' : 'Card Picker'}</h1>
+          <button class="icon ${menuOpen ? 'on' : ''}" data-act="menu" title="${menuOpen ? 'Back' : 'Settings'}">${menuOpen ? '✕' : '⚙'}</button>
           <button class="icon" data-act="min" title="Minimize">–</button>
         </header>
-        <div class="bar">
-          <label class="toggle ${selectMode ? 'on' : ''}" data-act="mode"><span class="sw"></span>Select mode</label>
-          <label class="toggle ${includePrices ? 'on' : ''}" data-act="prices"><span class="sw"></span>Include prices</label>
-        </div>
-        ${needSection()}
-        ${list}
-        <footer>
-          <div class="total"><span>${count} card${count === 1 ? '' : 's'}</span><span>${fmt(total)}</span></div>
-          <div class="row">
-            <button class="btn primary" data-act="copy" ${items.length ? '' : 'disabled'}>Copy list for seller</button>
-            <button class="btn ghost" data-act="clear" ${items.length ? '' : 'disabled'}>Clear</button>
-          </div>
-        </footer>
+        ${menuOpen ? menuView() : `<nav class="tabs">
+          <button class="${tab === 'want' ? 'on' : ''}" data-act="tab-want">Want list <b>${count}</b></button>
+          <button class="need-tab ${tab === 'need' ? 'on' : ''}" data-act="tab-need">★ Need <b class="${nNeed ? '' : 'zero'}">${needs.length ? nNeed : '–'}</b></button>
+        </nav>
+        ${!selectMode && !importing ? '<div class="notice"><span>Select mode is off. Clicks open cards normally.</span><button class="link" data-act="mode">Turn on</button></div>' : ''}
+        ${body}`}
       </div>`;
     if (importing) root.querySelector('textarea')?.focus();
   }
@@ -577,6 +616,8 @@
     f.text().then((txt) => importNeeds(txt, f.name));
   }
 
+  function setTab(t) { tab = t; menuOpen = false; savePrefs(); render(true); }
+
   function onPanelClick(e) {
     const btn = e.composedPath().find((n) => n.dataset && n.dataset.act);
     if (!btn) return;
@@ -587,7 +628,10 @@
     if (['rm', 'inc', 'dec'].includes(act) && !items[i]) return;
     switch (act) {
       case 'open': panelOpen = true; savePrefs(); render(true); break;
-      case 'min': panelOpen = false; importing = false; savePrefs(); render(true); break;
+      case 'min': panelOpen = false; importing = false; menuOpen = false; savePrefs(); render(true); break;
+      case 'menu': menuOpen = !menuOpen; render(true); break;
+      case 'tab-want': setTab('want'); break;
+      case 'tab-need': setTab('need'); break;
       case 'mode': selectMode = !selectMode; savePrefs(); render(true); break;
       case 'prices': includePrices = !includePrices; savePrefs(); render(true); break;
       case 'hl': highlightNeeds = !highlightNeeds; savePrefs(); render(true); break;
@@ -596,14 +640,20 @@
       case 'dec': items[i].want = Math.max(1, items[i].want - 1); save(); break;
       case 'clear': if (confirm(`Clear all ${items.length} cards from the list?`)) { items = []; save(); } break;
       case 'copy': copy(buildMessage()).then((ok) => toast(ok ? 'Copied — paste it to the seller' : 'Copy failed')); break;
-      case 'imp-open': importing = true; importError = ''; render(true); break;
+      case 'imp-open': importing = true; menuOpen = false; tab = 'need'; importError = ''; render(true); break;
       case 'imp-cancel': importing = false; importError = ''; render(true); break;
       case 'imp-go': importNeeds(root.querySelector('textarea')?.value || '', 'pasted'); break;
       case 'needs-clear':
         if (confirm('Remove your imported needs list?')) {
-          needs = []; needsMeta = null; store.set('cpp:needs', null); buildNeedIndex(); rekeyAll(); render(true);
+          menuOpen = false; needs = []; needsMeta = null; store.set('cpp:needs', null); buildNeedIndex(); rekeyAll(); render(true);
         }
         break;
+      case 'need-toggle': {
+        e.stopPropagation();
+        const m = matches.find((x) => x.key === btn.dataset.k);
+        if (m) { toggleItem(m.card); save(); }
+        break;
+      }
       case 'add-needs': matches.forEach((m) => toggleItem(m.card, true)); save(); break;
       case 'goto': scrollToCard(btn.dataset.k); break;
       case 'scan': scanAll(); break;
