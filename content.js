@@ -13,6 +13,14 @@
       if (hasChrome) return chrome.storage.local.set({ [key]: val });
       localStorage.setItem(key, JSON.stringify(val));
     },
+    async keys() {
+      if (hasChrome) return Object.keys(await chrome.storage.local.get(null));
+      return Object.keys(localStorage);
+    },
+    async remove(keys) {
+      if (hasChrome) return chrome.storage.local.remove(keys);
+      keys.forEach((k) => localStorage.removeItem(k));
+    },
   };
 
   // ---------- state ----------
@@ -36,10 +44,31 @@
 
   const isShowcase = () => location.pathname.startsWith('/showcase/');
   const sellerHandle = () => (location.pathname.match(/@([^/?#]+)/) || [])[1] || 'seller';
-  const keyForPage = () => {
-    const col = new URLSearchParams(location.search).get('collection') || 'all';
-    return `cpp:${sellerHandle()}:${col}`;
-  };
+  // One want list per seller, shared across all of their portfolios (?collection=…),
+  // since that is what gets sent to them. Handles are case-insensitive on Collectr.
+  const keyForPage = () => `cpp:list:${decodeURIComponent(sellerHandle()).toLowerCase()}`;
+
+  // Before v1.1.4 lists were stored per portfolio as "cpp:<handle>:<collection|all>".
+  // Merge any of those for this seller into the per-seller list, then delete them.
+  async function migrateLegacyLists(key, current) {
+    const handle = key.slice('cpp:list:'.length);
+    const legacy = (await store.keys()).filter((k) => {
+      const m = k.match(/^cpp:([^:]+):[^:]+$/);
+      return m && m[1] !== 'list' && decodeURIComponent(m[1]).toLowerCase() === handle;
+    });
+    if (!legacy.length) return current;
+    const merged = [...current];
+    for (const k of legacy) {
+      const old = (await store.get(k)) || {};
+      for (const it of Array.isArray(old.items) ? old.items : []) {
+        const clean = sanitize(it);
+        if (clean && !merged.some((x) => x.key === clean.key)) merged.push(clean);
+      }
+    }
+    await store.set(key, { items: merged.slice(0, 1000), updated: Date.now(), url: location.href });
+    await store.remove(legacy);
+    return merged.slice(0, 1000);
+  }
 
   // ---------- normalisation & matching ----------
   // "070/086" -> "70/86", "SVP 012" -> "svp12"
@@ -342,6 +371,7 @@
     listKey = keyForPage();
     const saved = (await store.get(listKey)) || {};
     items = (Array.isArray(saved.items) ? saved.items : []).map(sanitize).filter(Boolean).slice(0, 1000);
+    items = await migrateLegacyLists(listKey, items);
     const nd = (await store.get('cpp:needs')) || {};
     needs = (Array.isArray(nd.rows) ? nd.rows : []).map(sanitizeNeed).filter(Boolean).slice(0, 5000);
     needsMeta = needs.length ? { count: needs.length, importedAt: +nd.meta?.importedAt || 0, source: clip(nd.meta?.source, 80) } : null;
@@ -678,7 +708,7 @@
     });
   }).observe(document.body, { childList: true, subtree: true, characterData: true });
 
-  // SPA navigation: reload the list when the showcase/collection changes.
+  // SPA navigation: reload the list when the seller changes; portfolio switches keep the same list.
   let lastUrl = location.href;
   setInterval(() => {
     if (location.href === lastUrl) return;

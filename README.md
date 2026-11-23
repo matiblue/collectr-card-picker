@@ -9,7 +9,7 @@ A small Chrome extension for buying cards from someone's [Collectr](https://getc
 - **Works in grid and list view**, including cards that load as you scroll.
 - **Quantities.** If the seller has more than one copy, choose how many you want.
 - **One-click message.** Copies a numbered list with set, card number, condition, finish and (optionally) Collectr market price plus a total.
-- **Saved per seller/collection.** Close the tab and come back later.
+- **One list per seller.** Your picks are kept across all of a seller's portfolios, and saved so you can close the tab and come back later.
 - **Settings (⚙).** Select mode (turn off to click cards normally), include prices, highlight needed cards.
 - **★ Cards you need.** Import your "still needed" list from a spreadsheet and matching cards get a gold **★ NEED** badge in the grid. The **★ Need** tab lists them: click one to jump to it, **+** to add it, or **Add all**. The toolbar icon shows the count.
 

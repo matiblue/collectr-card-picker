@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Card Picker for Collectr",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "description": "Click cards on a Collectr showcase to build a want list, then copy a clean list to send the seller.",
   "permissions": [
     "storage"
